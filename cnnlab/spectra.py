@@ -17,6 +17,7 @@ import json
 import math
 import os
 import re
+import csv
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -397,6 +398,20 @@ def _save_cache(cache: SpectralCache, cache_path: Path, meta_path: Path) -> None
     )
 
 
+def _write_manifest(cache: SpectralCache, cache_dir: Path) -> Path:
+    """写出样本编号、类别名和重复扫描号，便于人工核对数据集。"""
+
+    manifest_path = cache_dir / "sample_manifest.csv"
+    with manifest_path.open("w", newline="", encoding="utf-8-sig") as file:
+        writer = csv.writer(file)
+        writer.writerow(["sample_index", "class_index", "odor", "replicate"])
+        for index, (class_index, odor, replicate) in enumerate(
+            zip(cache.y.tolist(), cache.groups.tolist(), cache.replicates.tolist())
+        ):
+            writer.writerow([index, class_index, odor, replicate])
+    return manifest_path
+
+
 def _setup_chinese_font() -> None:
     """让热图标题、材料名和坐标轴能够显示中文。"""
 
@@ -579,6 +594,7 @@ def prepare_spectral_cache(
                 cache = _load_cache(cache_path, meta_path)
                 if logger is not None:
                     logger.info("读取光谱缓存：%s（%d 个样本）", cache_path, cache.x.shape[0])
+                _write_manifest(cache, cache_dir)
                 save_heatmaps(cache, cfg, logger)
                 return cache
         except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
@@ -677,8 +693,11 @@ def prepare_spectral_cache(
         cache_path=cache_path,
     )
     _save_cache(cache, cache_path, meta_path)
+    # 额外导出易读的样本清单，便于核对“第几个样本属于哪个气味/扫描”。
+    manifest_path = _write_manifest(cache, cache_dir)
     if logger is not None:
         logger.info("光谱数据集缓存已保存：%s", cache_path)
+        logger.info("样本清册已保存：%s", manifest_path)
     # 只要缓存因参数变化而重建，就必须重画热图；否则旧材料顺序/旧色标
     # 会和新数据混在一起。
     save_heatmaps(cache, cfg, logger, force=True)

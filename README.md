@@ -89,6 +89,7 @@ python predict_spectra.py --config configs/spectral_cnn.yaml `
 
 - `data/spectral_processed/spectral_dataset.npz`：2550 个光谱样本及标签；
 - `data/spectral_processed/spectral_meta.json`：类别、材料、波长、处理参数和审计警告；
+- `data/spectral_processed/sample_manifest.csv`：每个样本对应的气味类别和扫描编号；
 - `outputs/spectra/heatmaps/<气味>.png`：每个气味一张材料×波长热图；
 - `outputs/spectra/heatmaps/all_odors_heatmaps.png`：所有气味热图索引；
 - `outputs/spectra/heatmaps/mean_diff_spectra.npz`：所有气味的平均差谱矩阵；
