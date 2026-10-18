@@ -1,0 +1,150 @@
+# CIFAR-10 示例：卷积 + 残差块 + 全局池化，展示可配置残差结构。
+dataset:
+  name: cifar10
+  root: data
+  download: true
+  num_classes: 10
+  in_channels: 3
+  image_size: 32
+  batch_size: 128
+  num_workers: 0
+  pin_memory: true
+  val_split: 0.1
+  transforms:
+    train:
+      random_crop:
+        enabled: true
+        size: 32
+        padding: 4
+      random_horizontal_flip: 0.5
+      color_jitter:
+        enabled: true
+        brightness: 0.1
+        contrast: 0.1
+        saturation: 0.1
+        hue: 0.02
+        p: 0.5
+    val:
+      random_crop: {enabled: false}
+      random_horizontal_flip: 0.0
+      color_jitter: {enabled: false}
+
+model:
+  name: cifar10_resnet
+  defaults:
+    # 残差内部层会显式写 activation: null，因此这里保持 null 更直观。
+    activation: null
+    order: [core, norm, activation, dropout]
+    weight_init: {method: kaiming_normal, mode: fan_out, nonlinearity: relu}
+  layers:
+    - type: conv2d
+      out_channels: 32
+      kernel_size: 3
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+
+    # repeat=2 会连续构建两个相同的残差块。
+    # 内部最后一个卷积不激活，残差相加后再统一 ReLU。
+    - type: residual
+      repeat: 2
+      projection: auto
+      activation: {name: relu, inplace: true}
+      layers:
+        - type: conv2d
+          out_channels: 32
+          kernel_size: 3
+          padding: same
+          norm: {type: batchnorm2d}
+          activation: null
+        - type: conv2d
+          out_channels: 32
+          kernel_size: 3
+          padding: same
+          norm: {type: batchnorm2d}
+          activation: null
+
+    - type: conv2d
+      out_channels: 64
+      kernel_size: 3
+      stride: 2
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+
+    - type: residual
+      repeat: 2
+      projection: auto
+      activation: {name: relu, inplace: true}
+      layers:
+        - type: conv2d
+          out_channels: 64
+          kernel_size: 3
+          padding: same
+          norm: {type: batchnorm2d}
+          activation: null
+        - type: conv2d
+          out_channels: 64
+          kernel_size: 3
+          padding: same
+          norm: {type: batchnorm2d}
+          activation: null
+
+    - type: conv2d
+      out_channels: 128
+      kernel_size: 3
+      stride: 2
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+
+    - type: residual
+      repeat: 2
+      projection: auto
+      activation: {name: relu, inplace: true}
+      layers:
+        - type: conv2d
+          out_channels: 128
+          kernel_size: 3
+          padding: same
+          norm: {type: batchnorm2d}
+          activation: null
+        - type: conv2d
+          out_channels: 128
+          kernel_size: 3
+          padding: same
+          norm: {type: batchnorm2d}
+          activation: null
+
+    - type: global_avgpool
+  head:
+    - type: dropout
+      p: 0.2
+    - type: linear
+      out_features: num_classes
+
+train:
+  epochs: 20
+  monitor: val_accuracy
+  amp:
+    enabled: true
+    dtype: bfloat16
+  early_stopping:
+    enabled: true
+    patience: 5
+
+optimizer:
+  name: sgd
+  lr: 0.05
+  weight_decay: 0.0005
+  params:
+    momentum: 0.9
+    nesterov: true
+
+scheduler:
+  name: cosine
+  step_on: epoch
+
+logging:
+  run_name: cifar10_resnet
+

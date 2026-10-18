@@ -1,0 +1,76 @@
+# 最轻量的端到端冒烟配置：不下载数据，几秒内可验证前向/反向和训练循环。
+dataset:
+  name: synthetic
+  root: data
+  download: false
+  num_classes: 10
+  in_channels: 3
+  image_size: 32
+  batch_size: 64
+  num_workers: 0
+  pin_memory: true
+  drop_last: false
+  transforms:
+    train:
+      random_crop: {enabled: false}
+      random_horizontal_flip: 0.0
+    val:
+      random_crop: {enabled: false}
+      random_horizontal_flip: 0.0
+  synthetic:
+    channels: 3
+    num_classes: 10
+    image_size: 32
+    train_samples: 512
+    val_samples: 128
+    test_samples: 128
+    noise_std: 0.08
+
+model:
+  name: smoke_cnn
+  layers:
+    - type: conv2d
+      out_channels: 16
+      kernel_size: 3
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+      weight_init: {method: kaiming_normal, mode: fan_out, nonlinearity: relu}
+    - type: maxpool2d
+      kernel_size: 2
+    - type: conv2d
+      out_channels: 32
+      kernel_size: 3
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+    - type: maxpool2d
+      kernel_size: 2
+    - type: global_avgpool
+  head:
+    - type: dropout
+      p: 0.1
+    - type: linear
+      out_features: num_classes
+
+train:
+  epochs: 2
+  monitor: val_accuracy
+  print_freq: 5
+  amp:
+    enabled: true
+    dtype: bfloat16
+  early_stopping:
+    enabled: false
+
+optimizer:
+  name: adamw
+  lr: 0.002
+  weight_decay: 0.01
+
+scheduler:
+  name: none
+
+logging:
+  run_name: smoke
+

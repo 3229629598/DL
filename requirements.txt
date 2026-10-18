@@ -1,0 +1,9 @@
+# 已在 dl1 环境中验证的版本。
+# CUDA 版 PyTorch 建议从官方索引安装；下面给出 CPU 安装也可用的最低版本。
+torch>=2.14.1
+torchvision>=0.29.1
+PyYAML>=6.0.3
+numpy>=1.26
+matplotlib>=3.8
+Pillow>=10.0
+
