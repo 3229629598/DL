@@ -1,0 +1,465 @@
+# =============================================================================
+# 通用 CNN 项目默认配置
+# -----------------------------------------------------------------------------
+# 场景配置会与本文档递归合并：
+#   configs/default.yaml  <-  configs/xxx.yaml  <-  命令行 --set
+# 因此场景文件只需要写与默认值不同的字段。列表字段会整体替换，不会拼接。
+# 例如场景文件中的 model.layers 会完整替换本文件的默认网络。
+# =============================================================================
+
+dataset:
+  # 可选：mnist / fashion_mnist / kmnist / cifar10 / cifar100 /
+  #       image_folder / synthetic
+  name: cifar10
+
+  # 数据根目录。相对路径以项目根目录为基准，而不是当前命令行目录。
+  root: data
+
+  # 内置数据集是否允许自动下载。自定义数据集请设为 false。
+  download: true
+
+  # 分类类别数。image_folder 可写 null/auto 让程序从子目录推断；
+  # synthetic 必填；内置数据集会与官方类别数自动核对。
+  num_classes: 10
+
+  # 输入通道数：灰度图为 1，RGB 图为 3。
+  in_channels: 3
+
+  # 变换后的目标尺寸 [高, 宽]；也可写单个整数表示正方形。
+  # 程序会用空白图实际跑一遍变换，确保该尺寸与网络输入一致。
+  image_size: 32
+
+  # 每个 batch 的样本数。显存不足时优先降低它。
+  batch_size: 64
+
+  # DataLoader 子进程数。Windows 建议先用 0；脚本已加主入口保护。
+  num_workers: 4
+
+  # 锁页内存。GPU 训练时通常更快；纯 CPU 环境可以设为 false。
+  pin_memory: true
+
+  # worker>0 时是否复用子进程，减少每个 epoch 的启动开销。
+  persistent_workers: true
+
+  # 每个 worker 预取多少个 batch。仅 num_workers>0 时生效。
+  prefetch_factor: 2
+
+  # 是否丢弃最后一个不足 batch_size 的训练 batch。
+  drop_last: false
+
+  # 从训练集随机划分验证集的比例。内置数据集默认使用它；
+  # image_folder 如果没有单独 val_dir，也会使用它。
+  val_split: 0.1
+
+  # 仅当 val_split=0 时生效。true 表示拿官方测试集当验证集，
+  # 会让最终测试指标偏乐观，正式实验不建议开启。
+  use_test_as_val: false
+
+  # 数据集级均值/方差。normalize.mode=custom 时使用；
+  # 写 null 表示使用内置数据集的官方统计量。
+  mean: null
+  std: null
+
+  # 自定义 ImageFolder 数据集专用配置。
+  image_folder:
+    # 训练目录，下面每个子目录是一个类别，例如 data/train/cat/xxx.jpg。
+    train_dir: null
+    # 单独验证目录；为 null 时按 val_split 从 train_dir 划分。
+    val_dir: null
+    # 测试目录；为 null 时不自动做测试集评估。
+    test_dir: null
+
+  # 内置数据集的数据增强配置。
+  # train 用于训练集，val 同时用于验证集和测试集（保证评估无随机性）。
+  transforms:
+    train:
+      # 可选自动增强策略：null/imagenet/cifar10/svhn。
+      auto_augment: null
+      # 统一缩放，写整数表示短边缩放到该值；也可写 [H,W]。
+      resize: null
+      # 随机缩放裁剪：适合 ImageNet 类大图训练。
+      random_resized_crop:
+        enabled: false
+        size: 32
+        scale: [0.8, 1.0]
+        ratio: [0.75, 1.333333]
+      # 随机裁剪；padding 可做零填充或 reflect/replicate/constant 填充。
+      random_crop:
+        enabled: true
+        size: 32
+        padding: 4
+        padding_mode: constant
+        fill: 0
+      # 固定中心裁剪；null 表示关闭。
+      center_crop: null
+      # 随机水平翻转概率，0 表示关闭。
+      random_horizontal_flip: 0.5
+      # 随机垂直翻转概率，0 表示关闭。
+      random_vertical_flip: 0.0
+      # 随机旋转角度；写 0/null 关闭，也可写字典指定插值方式。
+      random_rotation: 0
+      # 随机仿射变换。
+      random_affine:
+        enabled: false
+        degrees: 0
+        translate: [0.0, 0.0]
+        scale: [1.0, 1.0]
+        shear: 0.0
+        interpolation: NEAREST
+        fill: 0
+      # 颜色抖动；p 表示以多大概率应用整组颜色扰动。
+      color_jitter:
+        enabled: false
+        brightness: 0.2
+        contrast: 0.2
+        saturation: 0.2
+        hue: 0.05
+        p: 1.0
+      # 随机灰度化。num_output_channels 必须与网络输入通道匹配。
+      grayscale:
+        enabled: false
+        p: 0.1
+        num_output_channels: 3
+      # 高斯模糊。
+      gaussian_blur:
+        enabled: false
+        kernel_size: 3
+        sigma: [0.1, 2.0]
+      # 必须为 true，DataLoader 才能返回 torch.Tensor。
+      to_tensor: true
+      # 归一化：auto=内置均值方差，custom=使用 dataset.mean/std，
+      # none=不归一化（通常不推荐）。
+      normalize:
+        mode: auto
+        mean: null
+        std: null
+      # 随机擦除，在归一化后的张量上执行。
+      random_erasing:
+        enabled: false
+        p: 0.25
+        scale: [0.02, 0.2]
+        ratio: [0.3, 3.3]
+        value: 0.0
+        inplace: false
+
+    # 验证/测试变换：请保持确定性，不要启用随机翻转、随机裁剪等。
+    val:
+      auto_augment: null
+      resize: null
+      random_resized_crop:
+        enabled: false
+        size: 32
+        scale: [0.8, 1.0]
+        ratio: [0.75, 1.333333]
+      random_crop:
+        enabled: false
+        size: 32
+        padding: 0
+        padding_mode: constant
+        fill: 0
+      center_crop: null
+      random_horizontal_flip: 0.0
+      random_vertical_flip: 0.0
+      random_rotation: 0
+      random_affine:
+        enabled: false
+        degrees: 0
+        translate: [0.0, 0.0]
+        scale: [1.0, 1.0]
+        shear: 0.0
+        interpolation: NEAREST
+        fill: 0
+      color_jitter:
+        enabled: false
+        brightness: 0.0
+        contrast: 0.0
+        saturation: 0.0
+        hue: 0.0
+        p: 1.0
+      grayscale:
+        enabled: false
+        p: 0.0
+        num_output_channels: 3
+      gaussian_blur:
+        enabled: false
+        kernel_size: 3
+        sigma: [0.1, 2.0]
+      to_tensor: true
+      normalize:
+        mode: auto
+        mean: null
+        std: null
+      random_erasing:
+        enabled: false
+        p: 0.0
+        scale: [0.02, 0.2]
+        ratio: [0.3, 3.3]
+        value: 0.0
+        inplace: false
+
+  # 合成数据集参数。name=synthetic 时生效，不读取 root 中的真实文件。
+  synthetic:
+    channels: 3
+    num_classes: 10
+    image_size: 32
+    train_samples: 512
+    val_samples: 128
+    test_samples: 128
+    # 高斯噪声标准差；用于让任务不是完全确定性的。
+    noise_std: 0.15
+
+model:
+  # 仅用于日志标识。
+  name: generic_cnn
+
+  # 可选显式输入形状 [C,H,W]。推荐保持 null，由数据变换结果自动填充。
+  input_shape: null
+
+  # 是否把输入转换为 channels_last 内存格式；对部分 GPU 卷积更快。
+  channels_last: false
+
+  # 所有层共享的默认值。层内显式写同名键会覆盖这里；
+  # 显式写 null 表示关闭该组件（例如 activation: null）。
+  defaults:
+    activation: null
+    norm: null
+    dropout: 0.0
+    # 层块内部执行顺序，可自定义为 core->activation->norm 等。
+    order: [core, norm, activation, dropout]
+    # 是否对该层核心运算启用梯度检查点（省显存、增加计算）。
+    checkpoint: false
+    # 默认保留 PyTorch 自己的初始化；可改为 kaiming_normal 等。
+    weight_init:
+      method: default
+      mode: fan_out
+      nonlinearity: relu
+      bias_value: 0.0
+
+  # ---------------------------------------------------------------------------
+  # 特征提取层。每个列表项是一个 LayerBlock：
+  #   core -> norm -> activation -> dropout（顺序可用 order 修改）
+  #
+  # conv2d 支持参数：
+  #   out_channels, kernel_size, stride, padding(int/[H,W]/same/valid),
+  #   dilation, groups(int/depthwise/auto), depthwise, depth_multiplier,
+  #   bias(bool/null), padding_mode(zeros/reflect/replicate/circular),
+  #   padding_value
+  # linear 支持 out_features（可写 num_classes）、bias
+  # pooling 支持 kernel_size/stride/padding/ceil_mode/count_include_pad/divisor_override
+  # 其他 type：maxpool2d, avgpool2d, adaptive_avgpool2d, adaptive_maxpool2d,
+  #           global_avgpool, global_maxpool, flatten, identity,
+  #           sequence, residual, activation, dropout, batchnorm2d,
+  #           batchnorm1d, instancenorm2d, layernorm, groupnorm
+  # 通用层参数：repeat, trainable, checkpoint, order, weight_init,
+  #             norm, activation, dropout
+  # residual 另有：projection(auto/identity/conv1x1/linear/none),
+  #               projection_norm, projection_bias, projection_weight_init
+  # ---------------------------------------------------------------------------
+  layers:
+    - type: conv2d
+      out_channels: 32
+      kernel_size: 3
+      stride: 1
+      padding: same
+      dilation: 1
+      groups: 1
+      bias: null                 # null 表示有归一化时不加 bias
+      padding_mode: zeros
+      norm:
+        type: batchnorm2d
+        eps: 1.0e-5
+        momentum: 0.1
+      activation:
+        name: relu
+        inplace: true
+      dropout: 0.0
+      order: [core, norm, activation, dropout]
+      trainable: true
+      checkpoint: false
+      weight_init:
+        method: kaiming_normal
+        mode: fan_out
+        nonlinearity: relu
+        bias_value: 0.0
+
+    - type: maxpool2d
+      kernel_size: 2
+      stride: 2
+      padding: 0
+      ceil_mode: false
+      norm: null
+      activation: null
+      dropout: 0.0
+
+    - type: conv2d
+      out_channels: 64
+      kernel_size: 3
+      stride: 1
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+      weight_init: {method: kaiming_normal, mode: fan_out, nonlinearity: relu}
+
+    - type: maxpool2d
+      kernel_size: 2
+      stride: 2
+
+    - type: conv2d
+      out_channels: 128
+      kernel_size: 3
+      stride: 1
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+
+    - type: adaptive_avgpool2d
+      output_size: 1
+
+    - type: flatten
+
+  # 分类头。最后一个 linear 的 out_features 写 num_classes，
+  # 构建时会自动替换成数据集的真实类别数。
+  head:
+    - type: dropout
+      p: 0.2
+    - type: linear
+      out_features: num_classes
+      bias: true
+
+runtime:
+  # 训练输出根目录。相对路径以项目根目录为基准。
+  output_dir: outputs/runs
+  # auto/cpu/cuda/cuda:N/mps。
+  device: auto
+  seed: 42
+  # true 时请求确定性算法，可能降低速度。
+  deterministic: false
+  # cuDNN 自动选择卷积算法；输入尺寸固定时通常更快。
+  benchmark: true
+  # PyTorch 矩阵乘法精度：highest/high/medium。
+  float32_matmul_precision: high
+  # true 时只执行一个 batch 的前向/反向。
+  dry_run: false
+  compile:
+    enabled: false
+    backend: inductor
+    mode: default
+    fullgraph: false
+    dynamic: false
+
+train:
+  epochs: 5
+  # 监控指标：val_loss/val_accuracy/val_f1_macro/train_loss/train_accuracy。
+  monitor: val_accuracy
+  # auto：loss 取最小，其他指标取最大；也可强制 min/max。
+  monitor_mode: auto
+  # 判定“提升”的最小变化量，防止指标抖动触发保存。
+  min_delta: 0.0
+  # 每多少个 batch 打印一次日志。
+  print_freq: 20
+  # 梯度累积步数；显存不足时可增大它来模拟更大 batch。
+  grad_accumulation_steps: 1
+  # 损失出现 NaN/Inf 时是否立即停止。
+  stop_on_nan: true
+  # 是否在每步记录梯度范数（会增加少量开销）。
+  log_grad_norm: false
+  # 训练结束后是否自动在测试集上评估。
+  evaluate_test_after_train: true
+
+  amp:
+    # 混合精度只在 CUDA 上生效；bf16 不需要 GradScaler。
+    enabled: true
+    dtype: bfloat16             # float16/bf16
+    grad_scaler:
+      init_scale: 65536.0
+      growth_factor: 2.0
+      backoff_factor: 0.5
+      growth_interval: 2000
+
+  # 反向传播相关的可调参数。
+  backward:
+    grad_clip:
+      enabled: true
+      mode: norm                # norm/value/none
+      max_norm: 1.0
+      norm_type: 2.0
+      value: 0.1
+
+  early_stopping:
+    enabled: true
+    patience: 5
+    # 训练结束后恢复最佳权重，避免最后几轮过拟合。
+    restore_best_weights: true
+
+loss:
+  # cross_entropy/bce_with_logits/nll
+  name: cross_entropy
+  params:
+    # null、balanced 或长度等于类别数的数字列表。
+    weight: null
+    ignore_index: -100
+    reduction: mean
+    label_smoothing: 0.0
+    # bce_with_logits 专用；balanced 会按正负样本比例自动加权。
+    pos_weight: null
+
+optimizer:
+  # sgd/adam/adamw/rmsprop/adagrad/adadelta
+  name: adamw
+  lr: 0.001
+  weight_decay: 0.01
+  # 未使用自定义 param_groups 时，自动把 bias/归一化层放入 no_decay 组。
+  no_weight_decay_for_bias_and_norm: true
+  # 自定义参数组示例（需要时可取消注释）：
+  # param_groups:
+  #   - name: no_decay
+  #     patterns: ["\\.bias$", "norm"]
+  #     lr_multiplier: 1.0
+  #     weight_decay: 0.0
+  # 这里放优化器构造函数支持的其余参数。默认留空，
+  # 场景配置可分别写 betas/eps（AdamW）或 momentum/nesterov（SGD）。
+  params: {}
+
+scheduler:
+  # none/step/multi_step/cosine/cosine_restarts/plateau/
+  # linear/exponential/one_cycle
+  name: cosine
+  # epoch 或 batch；plateau 只支持 epoch。
+  step_on: epoch
+  params: {}
+
+checkpoint:
+  save_best: true
+  best_name: best.pth
+  save_last: true
+  last_name: last.pth
+  # 每 N 个 epoch 另存一份；0 表示关闭。
+  save_every_n_epochs: 0
+  # 断点续训路径；null 表示从头训练。相对项目根目录解析。
+  resume_from: null
+
+logging:
+  # 为空时目录名只包含数据集和时间；填写后会附加在目录名末尾。
+  run_name: null
+  # 同一秒启动多次时自动加 _01/_02 后缀，避免覆盖。
+  unique_run_dir: true
+  log_file: train.log
+  console_level: INFO
+  file_level: DEBUG
+  # 训练结束绘制 loss/accuracy/f1/lr 曲线。
+  plot_curves: true
+
+evaluation:
+  # 同时计算 top1/top5；类别数少于 k 时自动按可用类别数处理。
+  topk: [1, 5]
+  # num_classes=1 时的正类判定阈值。
+  binary_threshold: 0.5
+
+predict:
+  # 可从配置读取断点和输入路径，命令行参数优先级更高。
+  checkpoint: null
+  source: null
+  output_csv: predictions.csv
+  topk: 5
+  batch_size: 32
+

@@ -1,0 +1,79 @@
+# MNIST 示例：经典的 LeNet 风格网络，适合入门和快速验证真实数据管线。
+dataset:
+  name: mnist
+  root: data
+  download: true
+  num_classes: 10
+  in_channels: 1
+  image_size: 28
+  batch_size: 128
+  num_workers: 0
+  pin_memory: true
+  val_split: 0.1
+  transforms:
+    train:
+      random_crop: {enabled: false}
+      random_horizontal_flip: 0.0
+      random_rotation: 10
+    val:
+      random_crop: {enabled: false}
+      random_horizontal_flip: 0.0
+      random_rotation: 0
+
+model:
+  name: mnist_lenet
+  layers:
+    - type: conv2d
+      out_channels: 16
+      kernel_size: 5
+      stride: 1
+      padding: same
+      activation: {name: relu, inplace: true}
+      weight_init: {method: kaiming_normal, mode: fan_out, nonlinearity: relu}
+    - type: maxpool2d
+      kernel_size: 2
+    - type: conv2d
+      out_channels: 32
+      kernel_size: 5
+      stride: 1
+      padding: same
+      activation: {name: relu, inplace: true}
+    - type: maxpool2d
+      kernel_size: 2
+    - type: flatten
+  head:
+    - type: linear
+      out_features: 128
+      activation: {name: relu, inplace: true}
+    - type: dropout
+      p: 0.3
+    - type: linear
+      out_features: num_classes
+
+train:
+  epochs: 3
+  monitor: val_accuracy
+  amp:
+    enabled: false
+  early_stopping:
+    enabled: true
+    patience: 2
+
+optimizer:
+  name: sgd
+  lr: 0.01
+  weight_decay: 0.0001
+  params:
+    momentum: 0.9
+    nesterov: true
+
+scheduler:
+  name: step
+  step_on: epoch
+  params:
+    step_size: 2
+    gamma: 0.5
+
+logging:
+  run_name: mnist_lenet
+

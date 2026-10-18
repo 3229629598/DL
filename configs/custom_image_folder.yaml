@@ -1,0 +1,115 @@
+# 自定义图片目录示例。目录结构：
+#   data/my_dataset/train/类别A/*.jpg
+#   data/my_dataset/train/类别B/*.jpg
+#   data/my_dataset/val/类别A/*.jpg ...
+# 若没有 val_dir，可删除它并保留 val_split，从训练目录随机划分验证集。
+dataset:
+  name: image_folder
+  root: data
+  download: false
+  # null/auto 表示从 train_dir 的子目录数量自动推断。
+  num_classes: null
+  in_channels: 3
+  image_size: 224
+  batch_size: 32
+  num_workers: 0
+  pin_memory: true
+  val_split: 0.1
+  image_folder:
+    train_dir: data/my_dataset/train
+    val_dir: data/my_dataset/val
+    test_dir: data/my_dataset/test
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+  transforms:
+    train:
+      resize: 256
+      random_crop:
+        enabled: true
+        size: 224
+        padding: 0
+      random_horizontal_flip: 0.5
+      color_jitter:
+        enabled: true
+        brightness: 0.2
+        contrast: 0.2
+        saturation: 0.2
+        hue: 0.05
+        p: 0.5
+      normalize:
+        mode: custom
+    val:
+      resize: 256
+      center_crop: 224
+      random_crop: {enabled: false}
+      random_horizontal_flip: 0.0
+      color_jitter: {enabled: false}
+      normalize:
+        mode: custom
+
+model:
+  name: custom_image_cnn
+  layers:
+    - type: conv2d
+      out_channels: 32
+      kernel_size: 3
+      stride: 2
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+    - type: conv2d
+      out_channels: 64
+      kernel_size: 3
+      stride: 2
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+    - type: residual
+      repeat: 2
+      projection: auto
+      activation: {name: relu, inplace: true}
+      layers:
+        - type: conv2d
+          out_channels: 64
+          kernel_size: 3
+          padding: same
+          norm: {type: batchnorm2d}
+          activation: null
+        - type: conv2d
+          out_channels: 64
+          kernel_size: 3
+          padding: same
+          norm: {type: batchnorm2d}
+          activation: null
+    - type: conv2d
+      out_channels: 128
+      kernel_size: 3
+      stride: 2
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+    - type: global_avgpool
+  head:
+    - type: dropout
+      p: 0.3
+    - type: linear
+      out_features: num_classes
+
+train:
+  epochs: 10
+  monitor: val_accuracy
+  amp:
+    enabled: true
+    dtype: bfloat16
+
+optimizer:
+  name: adamw
+  lr: 0.001
+  weight_decay: 0.01
+
+scheduler:
+  name: cosine
+
+logging:
+  run_name: custom_image_folder
+
