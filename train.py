@@ -108,7 +108,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     device = resolve_device(str(runtime_cfg.get("device", "auto")), logger)
 
     logger.info("正在构建数据集……")
-    bundle = build_datasets(config, seed=seed)
+    bundle = build_datasets(config, seed=seed, logger=logger)
     for message in bundle.warnings:
         logger.warning(message)
     logger.info(

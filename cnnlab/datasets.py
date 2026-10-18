@@ -505,11 +505,19 @@ def _validate_dummy_transform(
 def build_datasets(
     config: Mapping[str, Any],
     seed: int,
+    logger: Any = None,
 ) -> DataBundle:
     """根据 dataset 配置构建训练、验证、测试数据集。"""
 
     dataset_cfg = config["dataset"]
     name = str(dataset_cfg["name"]).lower()
+    # 光谱数据有独立的 txt 解析、缓存和热图流程，提前分派，避免进入图像
+    # 数据集的 image_size/transforms 逻辑。
+    if name == "spectra":
+        from .spectra import build_spectral_datasets
+
+        return build_spectral_datasets(config, seed=seed, logger=logger)
+
     root = resolve_path(dataset_cfg.get("root", "data"), PROJECT_ROOT)
     assert root is not None
     root.mkdir(parents=True, exist_ok=True)

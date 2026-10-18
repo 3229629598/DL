@@ -1,0 +1,238 @@
+# =============================================================================
+# 电子鼻/光谱气味分类配置
+# -----------------------------------------------------------------------------
+# 输入数据：data/[original data]/<气味>/<材料>_*.txt
+# 每个 txt 包含 50 条扫描；dark_avg.xlsx 提供暗电流。
+# 处理流程：txt -> 减暗电流 -> z-score -> 减 none -> 平滑 -> 50 张材料×波长热图
+# =============================================================================
+
+dataset:
+  name: spectra
+  root: data
+  download: false
+  # 由光谱目录自动推断，不在配置中硬编码类别数。
+  num_classes: null
+  in_channels: 1
+  # 这是提示尺寸；真正的输入形状由材料交集的材料数和波长点数决定。
+  image_size: [23, 592]
+  batch_size: 64
+  num_workers: 0
+  pin_memory: true
+  drop_last: false
+
+  spectra:
+    # 原始数据目录；目录下每个子目录是一个气味，none 是空白。
+    raw_dir: data/[original data]
+    dark_avg: data/[original data]/dark_avg.xlsx
+    # 预处理缓存和热图输出。
+    cache_dir: data/spectral_processed
+
+    # 每个 txt 应包含的扫描数；数据异常时程序会明确报错，不会静默丢弃。
+    scan_count: 50
+
+    # 统一波长范围；None 表示使用 dark_avg 的全部 592 点。
+    wavelength_min: 400.411
+    wavelength_max: 849.672
+
+    # 材料集合策略：
+    # intersection：只使用所有气味都有的材料（推荐，当前为 23 种）；
+    # union：使用并集，缺失材料填零（会把“材料是否存在”编码进图像）。
+    material_strategy: intersection
+
+    # 只修正明显的文件名笔误，不改变真实材料含义。
+    material_aliases:
+      UiO6Tb309: UiO66Tb309
+      UiO6Tb365: UiO66Tb365
+
+    # 可选：显式指定热图纵轴顺序；null 表示按 none 目录的名称排序。
+    # 这里采用参考图的材料顺序，便于与已有实验图直接对照。
+    material_order:
+      - 808-365
+      - 808Eu309
+      - 808Eu365
+      - 808Tb309
+      - 808Tb365
+      - AlEu
+      - Albpydc
+      - EuBDC
+      - EuBDC-OH
+      - EuBTC
+      - EuNDC
+      - GaEu
+      - Gabpydc
+      - TbBDC
+      - TbBTC
+      - UiO66Eu309
+      - UiO66Eu365
+      - UiO66Tb309
+      - UiO66Tb365
+      - ZUM
+      - ZUMEu
+      - ZrEu
+      - Zrbpydc
+
+    # 归一化轴：
+    # wavelength：对每条扫描在波长方向做 z-score（推荐）；
+    # scan：在每个波长上对 50 条扫描做 z-score；
+    # none：不归一化。
+    normalize_axis: wavelength
+
+    # 空白参考：
+    # mean：用 none 的 50 条扫描平均光谱做参考（推荐）；
+    # paired：用第 j 条气体扫描减第 j 条 none 扫描。
+    blank_mode: mean
+
+    # 相减后沿波长方向做移动平均；窗口必须为正整数，偶数会自动加 1。
+    smooth_window: 9
+
+    # 可选截断，避免极少见离群点撑大热图色标；null 表示不截断。
+    clip: null
+
+    # 数据集划分在每个气味内部进行，保证三个划分都有全部气味类别。
+    # blocked：前 70% 扫描训练、后 15% 验证、最后 15% 测试（推荐）；
+    # stratified：在每个气味内随机划分。
+    split:
+      train: 0.70
+      val: 0.15
+      test: 0.15
+      strategy: blocked
+      seed: 42
+
+    # 只作用于训练集的数据增强。
+    augment:
+      random_shift: 4
+      scale: [0.95, 1.05]
+      noise_std: 0.02
+      wavelength_mask_p: 0.0
+      wavelength_mask_width: 20
+      material_dropout_p: 0.0
+
+    # 每个气味生成一张“材料×波长”热图，并额外生成全部气味索引图。
+    heatmaps:
+      enabled: true
+      output_dir: outputs/spectra/heatmaps
+      overwrite: false
+      combined: true
+      cmap: RdBu_r
+      vmin: -4.0
+      vmax: 4.0
+      figsize: [18, 12]
+      dpi: 200
+      x_ticks: [400.411, 618.185, 849.672]
+
+model:
+  name: spectral_cnn
+  input_shape: null
+  channels_last: false
+  defaults:
+    activation: null
+    norm: null
+    dropout: 0.0
+    order: [core, norm, activation, dropout]
+    checkpoint: false
+    weight_init:
+      method: kaiming_normal
+      mode: fan_out
+      nonlinearity: relu
+      bias_value: 0.0
+  layers:
+    - type: conv2d
+      out_channels: 32
+      kernel_size: 3
+      stride: 1
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+    - type: maxpool2d
+      kernel_size: 2
+      stride: 2
+    - type: conv2d
+      out_channels: 64
+      kernel_size: 3
+      stride: 1
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+    - type: maxpool2d
+      kernel_size: 2
+      stride: 2
+    - type: conv2d
+      out_channels: 128
+      kernel_size: 3
+      stride: 1
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+    - type: maxpool2d
+      kernel_size: 2
+      stride: 2
+    - type: conv2d
+      out_channels: 128
+      kernel_size: 3
+      stride: 1
+      padding: same
+      norm: {type: batchnorm2d}
+      activation: {name: relu, inplace: true}
+    - type: adaptive_avgpool2d
+      output_size: 1
+    - type: flatten
+  head:
+    - type: dropout
+      p: 0.35
+    - type: linear
+      out_features: num_classes
+
+train:
+  epochs: 30
+  monitor: val_accuracy
+  monitor_mode: auto
+  print_freq: 10
+  grad_accumulation_steps: 1
+  amp:
+    enabled: true
+    dtype: bfloat16
+  backward:
+    grad_clip:
+      enabled: true
+      mode: norm
+      max_norm: 1.0
+  early_stopping:
+    enabled: true
+    patience: 8
+    restore_best_weights: true
+
+loss:
+  name: cross_entropy
+  params:
+    weight: null
+    label_smoothing: 0.05
+    reduction: mean
+
+optimizer:
+  name: adamw
+  lr: 0.001
+  weight_decay: 0.01
+  no_weight_decay_for_bias_and_norm: true
+  params: {}
+
+scheduler:
+  name: cosine
+  step_on: epoch
+  params: {}
+
+logging:
+  run_name: spectral_cnn
+  unique_run_dir: true
+  log_file: train.log
+  console_level: INFO
+  plot_curves: true
+
+evaluation:
+  topk: [1, 5]
+
+predict:
+  # 光谱预测默认使用独立文件名，避免覆盖普通图片预测结果。
+  output_csv: predictions_spectra.csv
+  batch_size: 32
+  topk: 5
+

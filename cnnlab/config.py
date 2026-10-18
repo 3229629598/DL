@@ -147,6 +147,7 @@ def validate_config(config: dict[str, Any]) -> None:
         "cifar100",
         "image_folder",
         "synthetic",
+        "spectra",
     }
     if dataset_name not in supported_datasets:
         raise ConfigError(
@@ -170,7 +171,10 @@ def validate_config(config: dict[str, Any]) -> None:
             raise ConfigError("dataset.num_classes 必须是整数、auto 或 null。")
         if configured_classes < 1:
             raise ConfigError("dataset.num_classes 必须至少为 1。")
-    if dataset_name not in {"image_folder", "synthetic"} and configured_classes in {None, "auto"}:
+    if dataset_name not in {"image_folder", "synthetic", "spectra"} and configured_classes in {
+        None,
+        "auto",
+    }:
         raise ConfigError(f"{dataset_name} 必须配置 dataset.num_classes。")
 
     model = config["model"]
