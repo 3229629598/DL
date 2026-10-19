@@ -55,11 +55,11 @@ python train.py --config configs/spectral_cnn.yaml
 
 # 评估测试集
 python evaluate.py --config configs/spectral_cnn.yaml `
-  --checkpoint outputs/runs/spectra_xxx/best.pth --split test
+  --checkpoint outputs/runs/spectra_20261018_225150_final/best.pth --split test
 
 # 对一个新的气味目录预测
 python predict_spectra.py --config configs/spectral_cnn.yaml `
-  --checkpoint outputs/runs/spectra_xxx/best.pth `
+  --checkpoint outputs/runs/spectra_20261018_225150_final/best.pth `
   --odor-dir "data/[original data]/2-辛酮" --topk 5
 ```
 
