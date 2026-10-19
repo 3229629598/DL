@@ -6,4 +6,4 @@ outputs/
 data/
 predictions.csv
 .venv/
-
+.vscode/
